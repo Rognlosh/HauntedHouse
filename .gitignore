@@ -1,0 +1,68 @@
+# Сгенерированные Unity папки
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+[Mm]emoryCaptures/
+[Rr]ecordings/
+
+# .meta файлы НЕ игнорируем (важно!)
+!/[Aa]ssets/**/*.meta
+
+# Плагин JetBrains Rider
+/[Aa]ssets/Plugins/Editor/JetBrains*
+
+# IDE и редакторы
+.vs/
+.idea/
+.vscode/
+.gradle/
+
+# Автогенерируемые solution/project файлы
+ExportedObj/
+.consulo/
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# Метафайлы временных файлов
+*.pidb.meta
+*.pdb.meta
+*.mdb.meta
+
+# Краш-репорты Unity
+sysinfo.txt
+
+# Билды
+*.apk
+*.aab
+*.unitypackage
+*.app
+
+# Crashlytics
+crashlytics-build.properties
+
+# Addressables (упакованные)
+/[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/*/*.bin*
+
+# Временные Android-ассеты
+/[Aa]ssets/[Ss]treamingAssets/aa.meta
+/[Aa]ssets/[Ss]treamingAssets/aa/*
+
+# OS-специфичные файлы
+.DS_Store
+Thumbs.db
