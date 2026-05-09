@@ -16,6 +16,7 @@ using UnityEngine.SceneManagement;
 /// Транзитные сцены (Bootstrap) — на них музыка не меняется,
 /// текущий трек продолжает играть или молчать.
 /// </summary>
+[RequireComponent(typeof(AudioSource))]
 public class MusicManager : MonoBehaviour
 {
     public static MusicManager Instance { get; private set; }
@@ -87,9 +88,14 @@ public class MusicManager : MonoBehaviour
         Instance = this;
         DontDestroyOnLoad(gameObject);
 
+        // Если ссылка не назначена в инспекторе — берём AudioSource
+        // с того же GameObject (RequireComponent гарантирует, что он есть).
+        if (audioSource == null)
+            audioSource = GetComponent<AudioSource>();
+
         if (audioSource == null)
         {
-            Debug.LogError("[MusicManager] AudioSource не назначен.");
+            Debug.LogError("[MusicManager] AudioSource не найден ни в поле, ни на GameObject.");
             return;
         }
 
@@ -97,6 +103,17 @@ public class MusicManager : MonoBehaviour
         audioSource.volume = PlayerPrefs.GetFloat(VolumePrefKey, defaultVolume);
         audioSource.mute = PlayerPrefs.GetInt(MutedPrefKey, 0) == 1;
     }
+
+#if UNITY_EDITOR
+    /// <summary>
+    /// Вызывается Unity при добавлении компонента или нажатии Reset в инспекторе.
+    /// Автоматически связывает поле audioSource с компонентом на том же GameObject.
+    /// </summary>
+    private void Reset()
+    {
+        audioSource = GetComponent<AudioSource>();
+    }
+#endif
 
     private void OnEnable()
     {
