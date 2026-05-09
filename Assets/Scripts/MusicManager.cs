@@ -2,18 +2,27 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 
 /// <summary>
-/// Persistent-singleton, управляющий музыкой на протяжении всей игры.
-/// Создаётся один раз в Bootstrap-сцене и переживает все смены сцен через
-/// DontDestroyOnLoad. UI-привязка делается scene-side через VolumeUIBinder.
+/// Управляет музыкой на протяжении всей игры.
 ///
-/// Громкость и mute хранятся в PlayerPrefs и переживают рестарт игры.
-/// В Bootstrap-сцене музыка не играет — старт происходит при загрузке
-/// первой реальной сцены (MainMenu или уровень при прямом запуске).
+/// Особенности:
+///   • Префаб должен лежать в Assets/Resources/MusicManager.prefab.
+///   • Инстанцируется автоматически до загрузки первой сцены
+///     (RuntimeInitializeOnLoadMethod), поэтому музыка играет и при
+///     прямом запуске уровня в редакторе — без необходимости держать
+///     MusicManager на каждой сцене.
+///   • Не зависит от UI: громкостью и mute-флагом управляет MenuAudioBinder.
+///   • Громкость и mute сохраняются в PlayerPrefs.
+///
+/// Транзитные сцены (Bootstrap) — на них музыка не меняется,
+/// текущий трек продолжает играть или молчать.
 /// </summary>
-[RequireComponent(typeof(AudioSource))]
 public class MusicManager : MonoBehaviour
 {
     public static MusicManager Instance { get; private set; }
+
+    private const string PrefabResourcePath = "MusicManager";
+    private const string VolumePrefKey = "MusicManager.Volume";
+    private const string MutedPrefKey = "MusicManager.Muted";
 
     [Header("Треки")]
     [Tooltip("Музыка главного меню")]
@@ -21,26 +30,53 @@ public class MusicManager : MonoBehaviour
     [Tooltip("Музыка игрового уровня")]
     [SerializeField] private AudioClip gameMusic;
 
-    [Header("Настройки сцен")]
+    [Header("Ссылки")]
+    [SerializeField] private AudioSource audioSource;
+
+    [Header("Сцены")]
+    [Tooltip("Имя сцены с главным меню — на ней играет menuMusic")]
     [SerializeField] private string menuSceneName = "MainMenu";
-    [Tooltip("Имя bootstrap-сцены — в ней музыка не играет")]
-    [SerializeField] private string bootstrapSceneName = "Bootstrap";
+    [Tooltip("Сцены, на которых музыка не должна меняться " +
+             "(текущий трек продолжает играть). Полезно для Bootstrap.")]
+    [SerializeField] private string[] transitSceneNames = { "Bootstrap" };
 
-    [Header("Громкость по умолчанию")]
+    [Header("Дефолты")]
+    [Tooltip("Стартовая громкость, если в PlayerPrefs ничего не сохранено")]
     [Range(0f, 1f)]
-    [SerializeField] private float defaultVolume = 0.5f;
+    [SerializeField] private float defaultVolume = 0.7f;
 
-    private const string PrefVolume = "music_volume";
-    private const string PrefMute = "music_mute";
+    public float Volume => audioSource != null ? audioSource.volume : 0f;
+    public bool IsMuted => audioSource != null && audioSource.mute;
 
-    private AudioSource audioSource;
-
-    public float Volume => audioSource.volume;
-    public bool IsMuted => audioSource.mute;
+    public event System.Action<float> VolumeChanged;
+    public event System.Action<bool> MutedChanged;
 
     // -------------------------------------------------------------------------
-    // Unity lifecycle
+    // Автоспавн до загрузки первой сцены
     // -------------------------------------------------------------------------
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+    private static void AutoSpawn()
+    {
+        if (Instance != null) return;
+
+        var prefab = Resources.Load<GameObject>(PrefabResourcePath);
+        if (prefab == null)
+        {
+            Debug.LogError(
+                $"[MusicManager] Префаб не найден по пути " +
+                $"Assets/Resources/{PrefabResourcePath}.prefab. " +
+                $"Музыка играть не будет.");
+            return;
+        }
+
+        Instantiate(prefab);
+    }
+
+    // -------------------------------------------------------------------------
+    // Жизненный цикл
+    // -------------------------------------------------------------------------
+
     private void Awake()
     {
         if (Instance != null && Instance != this)
@@ -51,20 +87,15 @@ public class MusicManager : MonoBehaviour
         Instance = this;
         DontDestroyOnLoad(gameObject);
 
-        audioSource = GetComponent<AudioSource>();
-        audioSource.loop = true;
-        audioSource.playOnAwake = false;
+        if (audioSource == null)
+        {
+            Debug.LogError("[MusicManager] AudioSource не назначен.");
+            return;
+        }
 
-        // Восстанавливаем сохранённые настройки громкости и mute
-        audioSource.volume = PlayerPrefs.GetFloat(PrefVolume, defaultVolume);
-        audioSource.mute = PlayerPrefs.GetInt(PrefMute, 0) == 1;
-    }
-
-    private void Start()
-    {
-        // Если стартовали не из Bootstrap (прямой запуск сцены в редакторе) —
-        // запустим музыку для текущей сцены сразу.
-        PlayMusicForScene(SceneManager.GetActiveScene().name);
+        // Восстанавливаем настройки из PlayerPrefs
+        audioSource.volume = PlayerPrefs.GetFloat(VolumePrefKey, defaultVolume);
+        audioSource.mute = PlayerPrefs.GetInt(MutedPrefKey, 0) == 1;
     }
 
     private void OnEnable()
@@ -83,19 +114,26 @@ public class MusicManager : MonoBehaviour
     }
 
     // -------------------------------------------------------------------------
-    // Публичный API (используется VolumeUIBinder-ом из сцены)
+    // Публичное API
     // -------------------------------------------------------------------------
 
+    /// <summary>Установить громкость [0..1].</summary>
     public void SetVolume(float value)
     {
-        audioSource.volume = Mathf.Clamp01(value);
-        PlayerPrefs.SetFloat(PrefVolume, audioSource.volume);
+        if (audioSource == null) return;
+        value = Mathf.Clamp01(value);
+        audioSource.volume = value;
+        PlayerPrefs.SetFloat(VolumePrefKey, value);
+        VolumeChanged?.Invoke(value);
     }
 
+    /// <summary>Заглушить или включить звук. true = заглушено.</summary>
     public void SetMuted(bool muted)
     {
+        if (audioSource == null) return;
         audioSource.mute = muted;
-        PlayerPrefs.SetInt(PrefMute, muted ? 1 : 0);
+        PlayerPrefs.SetInt(MutedPrefKey, muted ? 1 : 0);
+        MutedChanged?.Invoke(muted);
     }
 
     // -------------------------------------------------------------------------
@@ -104,14 +142,25 @@ public class MusicManager : MonoBehaviour
 
     private void PlayMusicForScene(string sceneName)
     {
-        // В Bootstrap-сцене музыки нет — следующая сцена включит её сама.
-        if (sceneName == bootstrapSceneName) return;
+        // Транзитные сцены — не трогаем текущее воспроизведение
+        if (transitSceneNames != null)
+        {
+            foreach (var transit in transitSceneNames)
+            {
+                if (sceneName == transit) return;
+            }
+        }
+
+        if (audioSource == null) return;
 
         AudioClip targetClip = sceneName == menuSceneName ? menuMusic : gameMusic;
+        if (targetClip == null) return;
 
-        if (targetClip == null || audioSource.clip == targetClip) return;
+        // Если уже играет нужный трек — ничего не делаем
+        if (audioSource.clip == targetClip && audioSource.isPlaying) return;
 
         audioSource.clip = targetClip;
+        audioSource.loop = true;
         audioSource.Play();
     }
 }
