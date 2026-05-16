@@ -5,17 +5,9 @@ public class MainMenu : MonoBehaviour
 {
     public GameObject startMenu;
     public GameObject chooseLevelMenu;
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
-    void Start()
-    {
-        
-    }
 
-    // Update is called once per frame
-    void Update()
-    {
-        
-    }
+    [Tooltip("Имя сцены игрового уровня")]
+    [SerializeField] private string levelSceneName = "HountedHouseLvl1";
 
     public void ChooseLevelStart()
     {
@@ -23,8 +15,34 @@ public class MainMenu : MonoBehaviour
         startMenu.SetActive(false);
     }
 
+    public void LoadEasy()
+    {
+        StartLevel(Difficulty.Easy);
+    }
+
+    public void LoadMedium()
+    {
+        StartLevel(Difficulty.Medium);
+    }
+
+    public void LoadHard()
+    {
+        StartLevel(Difficulty.Hard);
+    }
+
+    /// <summary>
+    /// Старое имя, оставлено для совместимости с кнопкой EasyModeButton,
+    /// которая в инспекторе сцены ссылается на LoadEasyScene. После
+    /// переподключения кнопки на LoadEasy эту обёртку можно удалить.
+    /// </summary>
     public void LoadEasyScene()
     {
-        SceneManager.LoadScene("HountedHouseLvl1");
+        LoadEasy();
+    }
+
+    private void StartLevel(Difficulty difficulty)
+    {
+        GameSettings.SetByMenu(difficulty);
+        SceneManager.LoadScene(levelSceneName);
     }
 }
